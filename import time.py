@@ -514,58 +514,27 @@ def move_forward(total_steps, step_mode='box', check_tag_ids=None):
 # ========================== 抱箱函数（前进三次后强制抱箱） ==========================
 def approach_and_pick():
     """
-    调整阶段，每前进一次计数一次，累计前进3次后立即抱箱。
+    简化抱箱流程：识别方块 → 前进3步 → 夹紧 → 抬升。
     """
-    rospy.loginfo("开始抱箱流程（前进三次强制抱箱）")
+    rospy.loginfo("开始简化抱箱流程：识别方块 → 前进3步 → 夹紧 → 抬升")
     tracker.reset()
 
-    forward_count = 0
-
-    for adjust_cnt in range(30):
-        if forward_count >= MAX_FORWARD_BEFORE_PICK:
-            rospy.loginfo(f"已前进 {forward_count} 次，强制进入抱箱")
-            break
-
-        img = get_latest_image()
-        if img is None:
-            rospy.logwarn("获取图像失败")
-            break
+    img = get_latest_image()
+    if img is None:
+        rospy.logwarn("获取图像失败，仍继续执行抱箱")
+    else:
         x, y = find_box(img, 'green')
         if x is None:
-            rospy.logwarn("未检测到箱子，等待图像更新")
-            time.sleep(0.3)
-            continue
-
-        x_in_deadzone = (X_TARGET_LO - X_DEAD_ZONE <= x <= X_TARGET_HI + X_DEAD_ZONE)
-        y_in_target = (Y_TARGET_LO <= y <= Y_TARGET_HI)
-
-        if y_in_target and x_in_deadzone:
-            rospy.loginfo(f"坐标达标: x={x:.1f}, y={y:.1f}")
-            break
-
-        if y < Y_TARGET_LO:
-            rospy.loginfo(f"前进一步 y={y:.1f} (计数 {forward_count+1}/{MAX_FORWARD_BEFORE_PICK})")
-            go_fast(1)
-            forward_count += 1
-        elif x < X_TARGET_LO - X_DEAD_ZONE:
-            rospy.loginfo(f"左移一步 x={x:.1f}")
-            L_move1(1)
-        elif x > X_TARGET_HI + X_DEAD_ZONE:
-            rospy.loginfo(f"右移一步 x={x:.1f}")
-            R_move1(1)
-        elif y > Y_TARGET_HI:
-            rospy.loginfo(f"后退一步 y={y:.1f}")
-            Back1(1)
+            rospy.logwarn("未检测到绿色方块，仍继续执行抱箱")
         else:
-            rospy.loginfo("已达到合理区域，退出调整")
-            break
+            rospy.loginfo(f"检测到方块坐标: x={x:.1f}, y={y:.1f}")
 
+    rospy.loginfo("前进3步接近方块")
+    for i in range(3):
+        go_fast(1)
         time.sleep(0.2)
-    else:
-        rospy.logwarn("调整次数超限，仍尝试抱箱")
 
-    rospy.loginfo("执行抱箱动作")
-    ActionExecutor.execute("forward_small", 1, wait=0.3)
+    rospy.loginfo("执行抱箱动作：夹紧 → 抬升")
     ActionExecutor.execute("grip_close", 1, wait=0.8)
     ActionExecutor.execute("lift_up", 1, wait=0.6)
 
