@@ -721,7 +721,13 @@ def _handle_outbound_tag(tag_id, tag_x, tag_y, tag_yaw):
                 state.tag_id = 4
                 BoxR_move1(2)
                 BoxL_turn2(1)
-                intr = move_forward(12, 'box', check_tag_ids=[4, 5])
+                intr = move_forward(6, 'box', check_tag_ids=[4, 5])
+                if intr is not None:
+                    rospy.loginfo(f"[Tag] ⏭ 前进被 Tag #{intr} 中断，跳过后续动作")
+                    state.tag_id = intr
+                    return Flow.CONTINUE
+                BoxL_turn2(1)
+                intr = move_forward(4, 'box', check_tag_ids=[4, 5])
                 if intr is not None:
                     rospy.loginfo(f"[Tag] ⏭ 前进被 Tag #{intr} 中断，跳过后续动作")
                     state.tag_id = intr
