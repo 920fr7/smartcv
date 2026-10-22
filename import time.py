@@ -529,8 +529,8 @@ def approach_and_pick():
         else:
             rospy.loginfo(f"检测到方块坐标: x={x:.1f}, y={y:.1f}")
 
-    rospy.loginfo("前进3步接近方块")
-    for i in range(3):
+    rospy.loginfo("前进4步接近方块")
+    for i in range(4):
         go_fast(1)
         time.sleep(0.2)
 
@@ -736,13 +736,13 @@ def _handle_outbound_tag(tag_id, tag_x, tag_y, tag_yaw):
                     Box_Down(1)
                     state.has_box = False
                     rospy.loginfo("放下箱子，前进2步，重置循环")
-                    go_fast(2)
+                    go_fast2(2)
                     state.reset()
                     return Flow.CONTINUE
                 Box_Down(1)
                 state.has_box = False
                 rospy.loginfo("放下箱子，前进2步，重置循环")
-                go_fast(2)
+                go_fast2(2)
                 state.reset()
         # 非当前目标：忽略
     return Flow.FALLTHROUGH
