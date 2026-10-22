@@ -735,86 +735,16 @@ def _handle_outbound_tag(tag_id, tag_x, tag_y, tag_yaw):
                     rospy.loginfo(f"[Tag] ⏭ 前进被 Tag #{intr} 中断，原地放箱")
                     Box_Down(1)
                     state.has_box = False
-                    state.step = Step.INBOUND
-                    state.tag_id = intr
+                    rospy.loginfo("放下箱子，前进2步，重置循环")
+                    go_fast(2)
+                    state.reset()
                     return Flow.CONTINUE
                 Box_Down(1)
                 state.has_box = False
-                rospy.loginfo("放下箱子，空载前进并转向")
-                intr = move_forward(3, 'empty', check_tag_ids=[6])
-                if intr is not None:
-                    rospy.loginfo(f"[Tag] ⏭ 空载前进被 Tag #{intr} 中断")
-                    state.step = Step.INBOUND
-                    state.tag_id = intr
-                    return Flow.CONTINUE
-                R_turn2(3)
-                state.step = Step.INBOUND
+                rospy.loginfo("放下箱子，前进2步，重置循环")
+                go_fast(2)
+                state.reset()
         # 非当前目标：忽略
-    return Flow.FALLTHROUGH
-
-
-def _handle_inbound_tag(tag_id, tag_x, tag_y, tag_yaw):
-    """返程（空载）Tag 分派。返回 Flow 以控制主循环。"""
-    cfg = TAG_NAV_CONFIG.get(tag_id, {})
-    x_offset = cfg.get('x_offset', 0.0)
-    y_offset = cfg.get('y_offset', 0.0)
-    theta_offset = cfg.get('theta_offset', 0.0)
-    x_thresh = cfg.get('x_thresh', TAG_X_THRESH)
-    y_thresh = cfg.get('y_thresh', TAG_Y_THRESH)
-    theta_thresh = cfg.get('theta_thresh', TAG_THETA_THRESH)
-
-    if tag_id == 5:
-        result = turn_to_tag(tag_x, tag_y, tag_yaw,
-                             x_offset=0.08, y_offset=0.0, theta_offset=TAG_REVERSE_THETA_OFFSET,
-                             x_thresh=0.12, y_thresh=0.12, theta_thresh=15.0,
-                             box_mode=False)
-        if result:
-            state.phase = Phase.REVERSE_MOVING
-            rospy.loginfo("五号反向对正完成，移至六号")
-            state.tag_id = 6
-            intr = move_forward(3, 'empty', check_tag_ids=[6])
-            if intr is not None:
-                rospy.loginfo(f"[Tag] ⏭ 前进被 Tag #{intr} 中断")
-                state.tag_id = intr
-                return Flow.CONTINUE
-    elif tag_id == 6:
-        if state.tag_id == 6:
-            result = turn_to_tag(tag_x, tag_y, tag_yaw,
-                                 x_offset=x_offset, y_offset=y_offset,
-                                 theta_offset=theta_offset,
-                                 x_thresh=x_thresh, y_thresh=y_thresh,
-                                 theta_thresh=theta_thresh, box_mode=False)
-            if result:
-                rospy.loginfo("六号对正完成，左移至七号（前进）")
-                state.tag_id = 7
-                L_move2(6)
-                L_turn2(1)
-                intr = move_forward(5, 'empty', check_tag_ids=[7])
-                if intr is not None:
-                    rospy.loginfo(f"[Tag] ⏭ 前进被 Tag #{intr} 中断")
-                    state.tag_id = intr
-                    return Flow.CONTINUE
-        # 非当前目标：忽略
-    elif tag_id == 7:
-        if state.tag_id == 7:
-            result = turn_to_tag(tag_x, tag_y, tag_yaw,
-                                 x_offset=x_offset, y_offset=y_offset,
-                                 theta_offset=theta_offset,
-                                 x_thresh=x_thresh, y_thresh=y_thresh,
-                                 theta_thresh=theta_thresh, box_mode=False)
-            if result:
-                rospy.loginfo("七号对正完成，右移回一号")
-                R_move2(5)
-        # 非当前目标：忽略
-    elif tag_id == 1:
-        result = turn_to_tag(tag_x, tag_y, tag_yaw,
-                             x_offset=0.1, y_offset=0.0, theta_offset=TAG_REVERSE_THETA_OFFSET,
-                             x_thresh=0.12, y_thresh=0.12, theta_thresh=15.0,
-                             box_mode=False)
-        if result:
-            rospy.loginfo("一号反向对正完成，前进抓块")
-            move_forward(4, 'empty')
-            state.reset()
     return Flow.FALLTHROUGH
 
 
@@ -881,15 +811,10 @@ def main():
                     state.has_box = True
                     state.phase = Phase.END_BOX
                 elif state.phase is Phase.END_BOX:
-                    if state.step is Step.OUTBOUND:
-                        box_go2(5)
-                        BoxR_turn2(3)
-                        BoxL_move2(1)
-                        state.tag_id = 1
-                    elif state.step is Step.INBOUND:
-                        BoxR_turn2(3)
-                        state.step = Step.OUTBOUND
-                        state.tag_id = 1
+                    box_go2(5)
+                    BoxR_turn2(3)
+                    BoxL_move2(1)
+                    state.tag_id = 1
                     state.phase = Phase.START_MOVING
             else:
                 markers = tag_reader.get_nearest_marker()
@@ -902,10 +827,7 @@ def main():
                     rospy.loginfo_throttle(2, f"无Tag (连续{no_tag_count}次)，盲目前进, ID={state.tag_id}, phase={state.phase.value}, step={state.step.value}")
                     if no_tag_count > NO_TAG_TURN_THRESH:
                         rospy.logwarn("连续无Tag次数过多，执行转向寻找 Tag")
-                        if state.step is Step.OUTBOUND:
-                            BoxL_turn1(1)
-                        else:
-                            L_turn1(1)
+                        BoxL_turn1(1)
                         no_tag_count = 0
                         rate.sleep()
                         continue
@@ -923,14 +845,6 @@ def main():
                         box_go2(1)
                     elif state.tag_id == 5 and state.step is Step.OUTBOUND:
                         box_go(1)
-                    elif state.tag_id == 5 and state.step is Step.INBOUND and state.phase is Phase.START_MOVING:
-                        BoxL_move1(1)
-                    elif state.tag_id == 6:
-                        go_fast(1)
-                    elif state.tag_id == 7:
-                        go_fast(1)
-                    elif state.tag_id == 5 and state.step is Step.INBOUND and state.phase is Phase.REVERSE_MOVING:
-                        box_go(1)
                     else:
                         box_go(1)
                 else:
@@ -944,22 +858,15 @@ def main():
                     show_combined_debug(markers)
 
                     # ---------- 通用跳转逻辑 ----------
-                    # 允许检测到后续 Tag 时直接跳转，但跳过放箱关键阶段
+                    # 去程只允许跳到 1~5（6/7 无去程 handler，跳过去会死锁）
                     if state.tag_id != 0:
-                        if state.step is Step.OUTBOUND:
-                            # 去程只允许跳到 1~5（6/7 无去程 handler，跳过去会死锁）
-                            can_skip = state.tag_id < tag_id <= 5
-                        else:
-                            can_skip = tag_id > state.tag_id
+                        can_skip = state.tag_id < tag_id <= 5
                         if can_skip:
                             rospy.logwarn(f"检测到后续 Tag {tag_id}（当前 ID={state.tag_id}），直接跳转")
                             state.tag_id = tag_id
                     # ---------------------------------
 
-                    if state.step is Step.OUTBOUND:
-                        flow = _handle_outbound_tag(tag_id, tag_x, tag_y, tag_yaw)
-                    else:
-                        flow = _handle_inbound_tag(tag_id, tag_x, tag_y, tag_yaw)
+                    flow = _handle_outbound_tag(tag_id, tag_x, tag_y, tag_yaw)
 
                     if flow is Flow.CONTINUE:
                         continue
